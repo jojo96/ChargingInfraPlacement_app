@@ -16,12 +16,13 @@ const nearestHeavyBay = (c, bays) => (bays.length ? bays.reduce((b, x) => (dist(
 function initialProject() {
   const saved = loadProject()
   if (saved) return saved
-  return { ...defaultProject(), name: 'Example truck depot', site: [START.lat, START.lng], view: { c: [START.lat + 0.00005, START.lng + 0.0001], z: 19 }, items: exampleItems(START) }
+  // first visit: empty map. The example is under Report → Load example depot.
+  return { ...defaultProject(), name: 'New site', site: null, view: { c: [START.lat, START.lng], z: 17 }, items: [] }
 }
 
 export default function App() {
   const [project, setProjectRaw] = useState(initialProject)
-  const [ui, setUi] = useState({ step: loadProject() ? 0 : 2, sel: null, arm: null, pickSite: false, base: 'sat', labels: true, vehicles: true, view: '2d' })
+  const [ui, setUi] = useState({ step: 0, sel: null, arm: null, pickSite: false, base: 'sat', labels: true, vehicles: true, view: '2d' })
   const [seen3d, setSeen3d] = useState(false)
   const mapRef = useRef(null)
   const A = useMemo(() => analyse(project), [project])
