@@ -27,6 +27,9 @@ function styleFor(it, sel, err) {
   return { color: err ? '#ff5a5a' : c, weight: 2, fillColor: c, fillOpacity: 0.45 }
 }
 
+// below this zoom a few pixels are hundreds of metres, so moving and placing are locked
+const MIN_EDIT_ZOOM = 17
+
 const ll = (p) => ({ lat: p[0], lng: p[1] })
 const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 const vtxIcon = (add) => L.divIcon({ className: '', iconSize: [14, 14], iconAnchor: [7, 7], html: `<div class="vtx${add ? ' add' : ''}"></div>` })
@@ -44,6 +47,7 @@ const MapView = forwardRef(function MapView(props, ref) {
   latest.current = props
   const [coord, setCoord] = useState('—')
   const [dropHl, setDropHl] = useState(false)
+  const [locked, setLocked] = useState(project.view.z < MIN_EDIT_ZOOM)
 
   useImperativeHandle(ref, () => ({
     getCenter: () => mapRef.current.getCenter(),
@@ -86,11 +90,12 @@ const MapView = forwardRef(function MapView(props, ref) {
 
     map.on('click', (e) => {
       const p = latest.current
-      if (p.ui.arm) p.onPlace(e.latlng.lat, e.latlng.lng, e.originalEvent.shiftKey)
+      if (p.ui.arm) { if (map.getZoom() >= MIN_EDIT_ZOOM) p.onPlace(e.latlng.lat, e.latlng.lng, e.originalEvent.shiftKey) }
       else if (p.ui.pickSite) p.onPickSite(e.latlng.lat, e.latlng.lng)
       else if (p.ui.sel) p.onSelect(null)
     })
     map.on('moveend', () => { const c = map.getCenter(); latest.current.onView([c.lat, c.lng], map.getZoom()) })
+    map.on('zoomend', () => setLocked(map.getZoom() < MIN_EDIT_ZOOM))
 
     return () => {
       document.removeEventListener('mouseup', endDrag)
@@ -131,6 +136,7 @@ const MapView = forwardRef(function MapView(props, ref) {
       const it = p.project.items.find((i) => i.id === id)
       if (!it) return
       if (p.ui.sel !== id) p.onSelect(id)
+      if (mapRef.current.getZoom() < MIN_EDIT_ZOOM) return
       dragRef.current = { id, start: e.latlng, orig: { lat: it.lat, lng: it.lng } }
       mapRef.current.dragging.disable()
       p.onDragStart?.()
@@ -281,7 +287,7 @@ const MapView = forwardRef(function MapView(props, ref) {
     if (!d) return
     e.preventDefault()
     const [k, t] = d.split(':')
-    if (!CATALOG[k]?.[t]) return
+    if (!CATALOG[k]?.[t] || mapRef.current.getZoom() < MIN_EDIT_ZOOM) return
     const p = mapRef.current.mouseEventToLatLng(e)
     props.onDrop(k, t, p.lat, p.lng)
   }
@@ -301,7 +307,7 @@ const MapView = forwardRef(function MapView(props, ref) {
       </div>
       {A.cables.some((c) => c.id === ui.sel) || A.mv.some((m) => m.id === ui.sel)
         ? <div className="maphint">Route editing: drag ● to move a bend · drag ○ to add one · double-click ● to remove</div>
-        : null}
+        : locked ? <div className="maphint">Zoomed out: moving and placing are locked. Zoom in or press Fit layout to edit.</div> : null}
       <div className="status">{coord}</div>
     </div>
   )
