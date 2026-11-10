@@ -291,13 +291,31 @@ export default function Scene3D({ project, A, ui, active, onSelect, onBase, onVe
             g.add(box(1.6, 0.6, 2.4, mat('#34404c', { roughness: 0.25 }), 0, 1.3, -(front - 2.45)))
           }
         }
+      } else if (it.kind === 'disp') {
+        // dispenser post with screen and status light
+        const H = s.height || 2.0
+        g.add(box(s.w + 0.5, 0.15, s.h + 0.5, mat('#cfcfca'), 0, 0.075, 0))
+        g.add(box(s.w, H, s.h, mat(bad ? '#7a2e2e' : '#f2f4f6', { metalness: 0.1 }), 0, 0.15 + H / 2, 0))
+        g.add(box(s.w + 0.02, 0.08, s.h + 0.02, mat('#21d07a', { emissive: '#21d07a', emissiveIntensity: 0.9 }), 0, 0.15 + H - 0.25, 0))
+        g.add(box(s.w * 0.6, 0.4, 0.03, mat('#8fd3ff', { emissive: '#1d6fa5', emissiveIntensity: 0.5 }), 0, 0.15 + H * 0.68, s.h / 2 + 0.01))
+        g.add(box(s.w * 0.6, 0.4, 0.03, mat('#8fd3ff', { emissive: '#1d6fa5', emissiveIntensity: 0.5 }), 0, 0.15 + H * 0.68, -s.h / 2 - 0.01))
       } else if (it.kind === 'charger') {
+        // DC charger power unit: dark cabinet
         const H = s.height || 2.1
         g.add(box(s.w + 0.4, 0.15, s.h + 0.4, mat('#cfcfca'), 0, 0.075, 0))
         g.add(box(s.w, H, s.h, mat(bad ? '#7a2e2e' : '#2f363e', { metalness: 0.2 }), 0, 0.15 + H / 2, 0))
         g.add(box(s.w + 0.02, 0.07, s.h + 0.02, mat('#21d07a', { emissive: '#21d07a', emissiveIntensity: 0.8 }), 0, 0.15 + H - 0.3, 0))
-        g.add(box(s.w * 0.55, 0.45, 0.03, mat('#8fd3ff', { emissive: '#1d6fa5', emissiveIntensity: 0.5 }), 0, 0.15 + H * 0.68, s.h / 2 + 0.01))
-        g.add(box(s.w * 0.55, 0.45, 0.03, mat('#8fd3ff', { emissive: '#1d6fa5', emissiveIntensity: 0.5 }), 0, 0.15 + H * 0.68, -s.h / 2 - 0.01))
+        g.add(box(s.w * 0.7, H * 0.35, 0.03, mat('#1e242b'), 0, 0.15 + H * 0.3, s.h / 2 + 0.01))
+      } else if (it.kind === 'conv') {
+        // AC/DC converter: large cabinet with ventilation doors
+        const H = s.height || 2.3
+        g.add(box(s.w + 0.4, 0.2, s.h + 0.4, mat('#bfc4c8'), 0, 0.1, 0))
+        g.add(box(s.w, H, s.h, mat(bad ? '#7a2e2e' : '#3b7c8c', { metalness: 0.15 }), 0, 0.2 + H / 2, 0))
+        const nDoor = Math.max(2, Math.round(s.w / 1.1))
+        for (let i = 0; i < nDoor; i++) {
+          const x = -s.w / 2 + (i + 0.5) * (s.w / nDoor)
+          g.add(box((s.w / nDoor) * 0.82, H * 0.8, 0.04, mat('#2c6270'), x, 0.2 + H * 0.5, s.h / 2 + 0.02))
+        }
       } else if (it.kind === 'node') {
         const H = s.height || 1.2
         g.add(box(s.w, H, s.h, mat('#5b8fd6'), 0, H / 2, 0))
@@ -339,7 +357,7 @@ export default function Scene3D({ project, A, ui, active, onSelect, onBase, onVe
       if (mode === 'ug') for (const p of [P[0], P[P.length - 1]]) g.add(rod([p[0], -0.8, p[2]], [p[0], 0.1, p[2]], r, m))
       st.world.add(g)
     }
-    for (const c of A.cables) cab(c.pts, c.mode, c.id === selId ? '#ffd23f' : !c.size?.chosen ? '#ff4d4d' : c.mode === 'ug' ? '#ff8a3d' : '#4c8dff', c.id, c.runs)
+    for (const c of A.cables) cab(c.pts, c.mode, c.id === selId ? '#ffd23f' : !c.size?.chosen ? '#ff4d4d' : c.dc ? '#19c3b1' : c.mode === 'ug' ? '#ff8a3d' : '#4c8dff', c.id, c.runs)
     for (const m of A.mv) cab(m.pts, 'ug', m.id === selId ? '#ffd23f' : '#a16bf0', m.id, 1, 0.11)
 
     if (!st.fitted && project.items.length) { st.fitted = true; preset('iso') }

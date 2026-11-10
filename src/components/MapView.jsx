@@ -12,8 +12,8 @@ const BASEMAPS = {
 
 function hwIcon(it, sel, err) {
   const s = spec(it)
-  const px = it.kind === 'tx' ? 30 : it.kind === 'grid' ? 26 : it.kind === 'node' ? 24 : s.kw >= 400 ? 28 : 24
-  const radius = it.kind === 'charger' || it.kind === 'node' ? '50%' : '7px'
+  const px = it.kind === 'tx' ? 30 : it.kind === 'conv' ? 28 : it.kind === 'grid' ? 26 : it.kind === 'disp' ? 20 : it.kind === 'node' ? 24 : s.kw >= 400 ? 28 : 24
+  const radius = ['charger', 'node', 'disp'].includes(it.kind) ? '50%' : '7px'
   return L.divIcon({
     className: '', iconSize: [px, px], iconAnchor: [px / 2, px / 2],
     html: `<div class="hw${sel ? ' sel' : ''}${err ? ' err' : ''}" style="width:${px}px;height:${px}px;background:${KIND_COLOR[it.kind]};border-radius:${radius}">${ICON_SVG[it.kind]}</div>`,
@@ -197,9 +197,9 @@ const MapView = forwardRef(function MapView(props, ref) {
     for (const c of A.cables) {
       const sel = c.id === ui.sel
       const ok = !!c.size?.chosen
-      const color = !ok ? '#ff5a5a' : c.mode === 'ug' ? '#e08a3c' : '#4c8dff'
+      const color = !ok ? '#ff5a5a' : c.dc ? '#19c3b1' : c.mode === 'ug' ? '#e08a3c' : '#4c8dff'
       const ln = L.polyline(c.pts, { color, weight: sel ? 5 : 3.5, dashArray: c.mode === 'ug' && !sel ? '7 6' : null, opacity: selIsCable && !sel ? 0.45 : 0.95 }).addTo(g.over)
-      ln.bindTooltip(`${c.from.label} → ${c.to.label} · ${c.len.toFixed(1)} m · ${c.name}`, { sticky: true, className: 'lbl' })
+      ln.bindTooltip(`${c.from.label} → ${c.to.label} · ${c.dc ? 'DC' : 'AC'} · ${c.len.toFixed(1)} m · ${c.name}`, { sticky: true, className: 'lbl' })
       ln.on('click', (e) => { L.DomEvent.stop(e); latest.current.onSelect(c.id) })
       lines[c.id] = ln
     }

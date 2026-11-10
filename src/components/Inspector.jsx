@@ -1,6 +1,9 @@
 import { CATALOG, KIND_LABEL, spec } from '../lib/catalog.js'
+import { FEEDER_KINDS, isMcsType } from '../lib/analysis.js'
 import { IssueRow } from './Steps.jsx'
 import { BAY_ANGLES, bayAngle, bayBase, withAngle } from '../lib/project.js'
+
+const AUTO_LABEL = { disp: 'Nearest DC charger', charger: 'Nearest converter', conv: 'Nearest transformer', node: 'Nearest transformer' }
 
 export default function Inspector({ it, A, project, api, onClose }) {
   const s = spec(it)
@@ -9,12 +12,16 @@ export default function Inspector({ it, A, project, api, onClose }) {
   const cable = A.cables.find((c) => c.id === it.id)
   const mvLink = A.mv.find((m) => m.id === it.id)
   const load = A.loads.find((l) => l.t.id === it.id)
+  const cap = A.caps.find((c) => c.it.id === it.id)
   const place = A.placements?.[it.id]
-  const isMcs = it.type === 'mcs'
+  const isMcs = isMcsType(it)
   const R = project.rules
   const isBay = it.kind === 'bay'
-  const powered = it.kind === 'charger' || it.kind === 'node'
-  const feeders = [...A.tx, ...A.nodes.filter((n) => n.id !== it.id)]
+  const powered = !!FEEDER_KINDS[it.kind]
+  const rated = ['conv', 'charger', 'disp'].includes(it.kind)
+  const isOutlet = A.outlets.some((o) => o.id === it.id)
+  const pool = { tx: A.tx, node: A.nodes, conv: A.conv, charger: A.ch }
+  const feeders = (FEEDER_KINDS[it.kind] || []).flatMap((k) => pool[k]).filter((f) => f.id !== it.id)
 
   return (
     <div className="insp">
@@ -29,11 +36,24 @@ export default function Inspector({ it, A, project, api, onClose }) {
         </div>
         <div className="field">
           <label htmlFor="i_type">Type</label>
-          <select id="i_type" value={it.type} onChange={(e) => up({ type: e.target.value })}>
+          <select id="i_type" value={it.type} onChange={(e) => up({ type: e.target.value, kw: undefined })}>
             {Object.entries(CATALOG[it.kind]).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}
           </select>
         </div>
       </div>
+      {rated && (
+        <div className="field">
+          <label htmlFor="i_kw">Rated power (kW)</label>
+          <input id="i_kw" type="number" min="1" placeholder={`${s.kw} (catalogue)`} value={it.kw ?? ''}
+            onChange={(e) => { const v = parseFloat(e.target.value); up({ kw: isNaN(v) || v <= 0 ? undefined : v }) }} />
+        </div>
+      )}
+      {cap && (
+        <div className="row between small">
+          <span className="mono">{cap.used.toLocaleString()} / {cap.cap.toLocaleString()} kW used by {cap.n} {cap.what}{cap.n === 1 ? '' : 's'}</span>
+          <span className={'pill ' + (cap.pct > 100 ? 'bad' : cap.pct >= 100 ? 'warn' : 'ok')}>{cap.pct.toFixed(0)}%</span>
+        </div>
+      )}
       {isBay ? (
         <>
           <div className="field">
@@ -65,7 +85,7 @@ export default function Inspector({ it, A, project, api, onClose }) {
           <div className="field">
             <label htmlFor="i_feed">Fed from</label>
             <select id="i_feed" value={it.feed ?? it.tx ?? 'auto'} onChange={(e) => up({ feed: e.target.value, tx: undefined })}>
-              <option value="auto">Nearest transformer</option>
+              <option value="auto">{AUTO_LABEL[it.kind]}</option>
               {feeders.map((t) => <option key={t.id} value={t.id}>{t.label} · {KIND_LABEL[t.kind]}</option>)}
             </select>
           </div>
@@ -90,7 +110,7 @@ export default function Inspector({ it, A, project, api, onClose }) {
           {cable && (
             <div className="cablecard">
               <div className="row between"><b>{cable.name}</b><span className={'pill ' + (!cable.size?.chosen ? 'bad' : cable.size.warnings.length ? 'warn' : 'ok')}>{!cable.size?.chosen ? 'FAIL' : 'OK'}</span></div>
-              <p className="small mono muted">{cable.len.toFixed(1)} m · I<sub>b</sub> {cable.Ib.toFixed(0)} A · I<sub>z</sub> {cable.Iz.toFixed(0)} A · ΔU {cable.vd.toFixed(2)}% · {cable.method}</p>
+              <p className="small mono muted">{cable.dc ? 'DC' : 'AC'} {cable.voltage} V from {cable.from.label} · {cable.len.toFixed(1)} m · I<sub>b</sub> {cable.Ib.toFixed(0)} A · I<sub>z</sub> {cable.Iz.toFixed(0)} A · ΔU {cable.vd.toFixed(2)}% · {cable.method}</p>
               <div className="row">
                 <button className="btn pri" onClick={() => api.openWizard(it.id)}>Size cable…</button>
                 {it.wp?.length > 0 && <button className="btn" onClick={() => up({ wp: [] })}>Reset route</button>}
@@ -107,7 +127,7 @@ export default function Inspector({ it, A, project, api, onClose }) {
                 <span className={'pill ' + (place.gap >= 0 && place.gap <= R.mcsMaxGap ? 'ok' : place.gap < 0 || isMcs ? 'bad' : 'warn')}>{place.gap.toFixed(2)} m</span></div>
             </div>
           )}
-          {it.kind === 'charger' && A.heavy.length > 0 && <button className="btn" onClick={() => api.snapCharger(it.id)}>Snap to charging spot{place ? ` in ${place.bay.label}` : ''}</button>}
+          {isOutlet && A.heavy.length > 0 && <button className="btn" onClick={() => api.snapCharger(it.id)}>Snap to charging spot{place ? ` in ${place.bay.label}` : ''}</button>}
         </>
       )}
 

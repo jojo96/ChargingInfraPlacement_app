@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { CATALOG, ICON_SVG, KIND_COLOR, spec } from '../lib/catalog.js'
+import { CATALOG, ICON_SVG, KIND_COLOR, powerOf } from '../lib/catalog.js'
 import { METHODS } from '../lib/iec.js'
 import { bom, cableSchedule, eur, downloadText, slug, toCsv } from '../lib/project.js'
 import CableWizard from './CableWizard.jsx'
@@ -9,7 +9,7 @@ import CableWizard from './CableWizard.jsx'
 function Tile({ kind, type, ui, patchUi, api }) {
   const s = CATALOG[kind][type]
   const armed = ui.arm && ui.arm[0] === kind && ui.arm[1] === type
-  const meta = kind === 'charger' || kind === 'node' ? s.note : kind === 'grid' ? 'MV feed' : `${s.w} × ${s.h} m`
+  const meta = s.note || (kind === 'grid' ? 'MV feed' : `${s.w} × ${s.h} m`)
   const title = kind === 'tx' ? `${s.kva} kVA` : s.name
   const glyph = kind === 'bay'
     ? <svg viewBox="0 0 24 24" width="18" height="18"><rect x={12 - s.w * 1.6} y={12 - Math.min(s.h, 7) * 1.5} width={s.w * 3.2} height={Math.min(s.h, 7) * 3} fill="none" stroke="#17212b" strokeWidth="1.6" /></svg>
@@ -192,23 +192,32 @@ export function ParkingStep({ project, A, ui, patchUi, api }) {
 
 /* ---------- 3. Hardware (sequence) ---------- */
 
+function CapRows({ caps }) {
+  return caps.map((c) => (
+    <div key={c.it.id} className="row small between">
+      <span className="mono">{c.it.label} · {c.used.toLocaleString()} / {c.cap.toLocaleString()} kW · {c.n} {c.what}{c.n === 1 ? '' : 's'}</span>
+      <span className={'pill ' + (c.pct > 100 ? 'bad' : c.pct >= 100 ? 'warn' : 'ok')}>{c.pct.toFixed(0)}%</span>
+    </div>
+  ))
+}
+
 export function HardwareStep({ project, A, ui, patchUi, api }) {
-  const hasCh = A.ch.length > 0, hasTx = A.tx.length > 0, hasG = A.grid.length > 0
+  const hasG = A.grid.length > 0, hasTx = A.tx.length > 0, hasConv = A.conv.length > 0, hasCh = A.ch.length > 0, hasD = A.disp.length > 0
   const R = project.rules
-  const kw = A.ch.reduce((s, c) => s + spec(c).kw, 0)
+  const kw = A.ch.reduce((s, c) => s + powerOf(c), 0)
   const tiles = (kind) => <div className="tiles">{Object.keys(CATALOG[kind]).map((t) => <Tile key={t} kind={kind} type={t} ui={ui} patchUi={patchUi} api={api} />)}</div>
+  const seq = (n, ok, locked) => ({ className: 'seqi' + (ok ? ' ok' : '') + (locked ? ' locked' : ''), 'data-n': n })
   return (
     <>
-      <div className="sec"><h2>Place hardware in sequence</h2><p className="muted small">Chargers first, then the transformer that feeds them, then the grid connection. Each step unlocks the next.</p></div>
+      <div className="sec"><h2>Place hardware in sequence</h2><p className="muted small">Follow the power from the grid to the vehicle: grid connection, transformer, distribution, converter, DC chargers, dispensers. Each step unlocks the next.</p></div>
       <div className="seq">
-        <div className={'seqi' + (hasCh ? ' ok' : '')} data-n="1">
-          <h4>Select DC chargers</h4>
-          {tiles('charger')}
-          <p className="small muted">{A.ch.length} placed · {kw.toLocaleString()} kW installed</p>
+        <div {...seq(1, hasG, false)}>
+          <h4>Grid connection point</h4>
+          {tiles('grid')}
         </div>
-        <div className={'seqi' + (hasTx ? ' ok' : '') + (hasCh ? '' : ' locked')} data-n="2">
-          <h4>Set the transformer</h4>
-          {!hasCh && <p className="small muted">Place a DC charger first.</p>}
+        <div {...seq(2, hasTx, !hasG)}>
+          <h4>Transformer</h4>
+          {!hasG && <p className="small muted">Place the grid connection first.</p>}
           {tiles('tx')}
           {A.loads.map((l) => (
             <div key={l.t.id} className="row small between">
@@ -217,32 +226,48 @@ export function HardwareStep({ project, A, ui, patchUi, api }) {
             </div>
           ))}
         </div>
-        <div className={'seqi' + (A.nodes.length ? ' ok' : '') + (hasTx ? '' : ' locked')} data-n="3">
+        <div {...seq(3, A.nodes.length > 0, !hasTx)}>
           <h4>Distribution <span className="muted small">(optional)</span></h4>
-          <p className="small muted">A cabinet or junction box between transformer and chargers gives a star layout with one long feeder and short branch cables. Select a charger and set <b>Fed from</b> to the cabinet.</p>
+          <p className="small muted">A cabinet or junction box between the transformer and the converters. Select a converter and set <b>Fed from</b> to the cabinet.</p>
           {tiles('node')}
         </div>
-        <div className={'seqi' + (hasG ? ' ok' : '') + (hasTx ? '' : ' locked')} data-n="4">
-          <h4>Grid connection point</h4>
-          {!hasTx && <p className="small muted">Set a transformer first.</p>}
-          {tiles('grid')}
+        <div {...seq(4, hasConv, !hasTx)}>
+          <h4>Converter <span className="muted small">(AC/DC)</span></h4>
+          {!hasTx && <p className="small muted">Place a transformer first.</p>}
+          <p className="small muted">The converter's capacity is what its DC chargers share. For any other capacity, place one, select it and type the kW under <b>Rated power</b>.</p>
+          {tiles('conv')}
+          <CapRows caps={A.caps.filter((c) => c.it.kind === 'conv')} />
         </div>
-        <div className="seqi" data-n="5">
+        <div {...seq(5, hasCh, !hasConv)}>
+          <h4>DC chargers</h4>
+          {!hasConv && <p className="small muted">Place a converter first.</p>}
+          <p className="small muted">The chargers on one converter may add up to its capacity: a 4 MW converter feeds 4 × 1 MW, 80 × 50 kW, or any mix.</p>
+          {tiles('charger')}
+          <p className="small muted">{A.ch.length} placed · {kw.toLocaleString()} kW</p>
+        </div>
+        <div {...seq(6, hasD, !hasCh)}>
+          <h4>Dispensers</h4>
+          {!hasCh && <p className="small muted">Place a DC charger first.</p>}
+          <p className="small muted">The dispensers on one charger may add up to its power: a 1 MW charger feeds 1 × 1 MW, 20 × 50 kW, or any mix. Dispensers stand beside the bays.</p>
+          {tiles('disp')}
+          <CapRows caps={A.caps.filter((c) => c.it.kind === 'charger')} />
+        </div>
+        <div className="seqi" data-n="7">
           <h4>Distance constraints</h4>
           <div className="row">
             <NumField id="r_txClear" label="Transformer clearance (m)" step={0.5} value={R.txClear} onChange={(v) => api.setRule('txClear', v)} />
-            <NumField id="r_chargerReach" label="Charger → bay reach (m)" step={0.5} value={R.chargerReach} onChange={(v) => api.setRule('chargerReach', v)} />
+            <NumField id="r_chargerReach" label="Dispenser → bay reach (m)" step={0.5} value={R.chargerReach} onChange={(v) => api.setRule('chargerReach', v)} />
           </div>
           <div className="row">
-            <NumField id="r_chargerGap" label="Charger spacing (m)" step={0.5} value={R.chargerGap} onChange={(v) => api.setRule('chargerGap', v)} />
-            <NumField id="r_maxLv" label="Max LV cable (m)" step={5} value={R.maxLv} onChange={(v) => api.setRule('maxLv', v)} />
+            <NumField id="r_chargerGap" label="Dispenser spacing (m)" step={0.5} value={R.chargerGap} onChange={(v) => api.setRule('chargerGap', v)} />
+            <NumField id="r_maxLv" label="Max cable length (m)" step={5} value={R.maxLv} onChange={(v) => api.setRule('maxLv', v)} />
           </div>
           <div className="row">
             <NumField id="r_maxVd" label="Max voltage drop (%)" step={0.5} value={R.maxVd} onChange={(v) => api.setRule('maxVd', v)} />
             <NumField id="r_simult" label="Simultaneity factor" step={0.05} min="0.1" max="1" value={R.simult} onChange={(v) => api.setRule('simult', v)} />
           </div>
           <h4 style={{ marginTop: 6 }}>Truck charging spot (CharIN / FLEXMCS)</h4>
-          <p className="small muted">MCS goes on the driver's left. The green strip on each truck bay shows the allowed zone. Select a charger and use <b>Snap to charging spot</b> to place it there.</p>
+          <p className="small muted">MCS dispensers go on the driver's left. The green strip on each truck bay shows the allowed zone. Select a dispenser and use <b>Snap to charging spot</b> to place it there.</p>
           <div className="row">
             <NumField id="r_mcsFrontMin" label="From bay front, min (m)" step={0.1} value={R.mcsFrontMin} onChange={(v) => api.setRule('mcsFrontMin', v)} />
             <NumField id="r_mcsFrontMax" label="From bay front, max (m)" step={0.1} value={R.mcsFrontMax} onChange={(v) => api.setRule('mcsFrontMax', v)} />
@@ -280,7 +305,7 @@ export function WiringStep({ project, A, ui, patchUi, api }) {
   const setC = (k, v) => api.setCableDefault(k, v)
   return (
     <>
-      <div className="sec"><h2>Route and size the cables</h2><p className="muted small">Each charger is fed from its nearest transformer, or from the cabinet or transformer you pick. Select a cable to drag its route and size it to IEC 60364-5-52.</p></div>
+      <div className="sec"><h2>Route and size the cables</h2><p className="muted small">Cables follow the power chain: AC from the transformer to the converters, DC from each converter to its chargers and on to the dispensers. Select a cable to drag its route and size it to IEC 60364-5-52.</p></div>
       <div className="sec">
         <h3>Routing defaults</h3>
         <div className="row">
@@ -316,15 +341,20 @@ export function WiringStep({ project, A, ui, patchUi, api }) {
             <select id="d_oh" value={c0.methodOh} onChange={(e) => setC('methodOh', e.target.value)}>{METHODS.filter((m) => !m.ground).map((m) => <option key={m.id} value={m.id}>{m.id} · {m.label}</option>)}</select>
           </div>
         </div>
+        <div className="row">
+          <NumField id="r_acV" label="AC voltage (V)" step={10} value={project.rules.voltage} onChange={(v) => api.setRule('voltage', v)} />
+          <NumField id="r_dcV" label="DC link voltage (V)" step={50} value={project.rules.dcVoltage} onChange={(v) => api.setRule('dcVoltage', v)} />
+        </div>
+        <p className="small muted">Material and insulation apply to the AC cables. DC cables are sized as copper / XLPE.</p>
       </div>
       <div className="sec">
         <h3>Cables</h3>
         <div className="list">
           {A.cables.length ? A.cables.map((c) => (
             <div className="li res" key={c.id} onClick={() => api.focusItem(c.id)}>
-              <span className="dot" style={{ background: !c.size?.chosen ? 'var(--bad)' : c.mode === 'ug' ? 'var(--ug)' : 'var(--oh)' }} />
+              <span className="dot" style={{ background: !c.size?.chosen ? 'var(--bad)' : c.dc ? '#19c3b1' : c.mode === 'ug' ? 'var(--ug)' : 'var(--oh)' }} />
               <span className="grow">
-                <b>{c.from.label} → {c.to.label}</b> <span className="muted small">{c.method}</span><br />
+                <b>{c.from.label} → {c.to.label}</b> <span className="tag">{c.dc ? 'DC' : 'AC'}</span> <span className="muted small">{c.method}</span><br />
                 <span className="mono small muted">{c.len.toFixed(1)} m · {c.Ib.toFixed(0)} A · {c.name} · ΔU {c.vd.toFixed(2)}%</span>
               </span>
               <span className={'pill ' + (!c.size?.chosen ? 'bad' : c.size.warnings.length ? 'warn' : 'ok')}>{!c.size?.chosen ? 'FAIL' : c.size.warnings.length ? 'CHECK' : 'OK'}</span>
@@ -342,8 +372,8 @@ export function WiringStep({ project, A, ui, patchUi, api }) {
 export function ReportStep({ project, A, ui, patchUi, api }) {
   const B = bom(project, A)
   const sched = cableSchedule(A)
-  const kw = A.ch.reduce((s, c) => s + spec(c).kw, 0)
-  const kva = A.tx.reduce((s, t) => s + spec(t).kva, 0)
+  const kw = A.ch.reduce((s, c) => s + powerOf(c), 0)
+  const kva = A.tx.reduce((s, t) => s + CATALOG.tx[t.type].kva, 0)
   const fails = A.issues.filter((x) => x.sev === 'bad').length
   const warns = A.issues.length - fails
   const fileRef = useRef(null)
@@ -355,8 +385,8 @@ export function ReportStep({ project, A, ui, patchUi, api }) {
     downloadText(slug(project.name) + '-bom.csv', toCsv(rows), 'text/csv')
   }
   const exportSched = () => {
-    const rows = [['From', 'To', 'Length m', 'Load kW', 'Ib A', 'Method', 'Circuits in group', 'Cable', 'Iz A', 'Voltage drop %', 'Laying', 'OK'],
-      ...sched.map((r) => [r.from, r.to, r.len.toFixed(1), r.kw.toFixed(0), r.Ib.toFixed(0), r.method, r.groupN, r.cable, r.Iz.toFixed(0), r.vd.toFixed(2), r.mode, r.ok ? 'yes' : 'no'])]
+    const rows = [['From', 'To', 'System', 'Voltage V', 'Length m', 'Load kW', 'Ib A', 'Method', 'Circuits in group', 'Cable', 'Iz A', 'Voltage drop %', 'Laying', 'OK'],
+      ...sched.map((r) => [r.from, r.to, r.sys, r.volt, r.len.toFixed(1), r.kw.toFixed(0), r.Ib.toFixed(0), r.method, r.groupN, r.cable, r.Iz.toFixed(0), r.vd.toFixed(2), r.mode, r.ok ? 'yes' : 'no'])]
     downloadText(slug(project.name) + '-cable-schedule.csv', toCsv(rows), 'text/csv')
   }
   const onImport = (e) => {
@@ -374,7 +404,7 @@ export function ReportStep({ project, A, ui, patchUi, api }) {
       <div className="sec"><h2>{project.name}</h2><p className="muted small mono">{project.site ? `${project.site[0].toFixed(5)}, ${project.site[1].toFixed(5)}` : 'No site pinned'}</p></div>
       <div className="kpis">
         <div className="kpi"><div className="v">{A.bays.length}</div><div className="l">Parking bays</div></div>
-        <div className="kpi"><div className="v">{A.ch.length}</div><div className="l">Chargers · {kw.toLocaleString()} kW</div></div>
+        <div className="kpi"><div className="v">{A.disp.length}</div><div className="l">Dispensers · {A.ch.length} chargers, {kw.toLocaleString()} kW</div></div>
         <div className="kpi"><div className="v">{kva.toLocaleString()}</div><div className="l">kVA transformer</div></div>
         <div className="kpi"><div className="v">{eur(B.total)}</div><div className="l">Indicative CAPEX</div></div>
       </div>
@@ -390,7 +420,7 @@ export function ReportStep({ project, A, ui, patchUi, api }) {
             <thead><tr><th>Circuit</th><th>Cable</th><th className="n">m</th><th className="n">ΔU</th></tr></thead>
             <tbody>
               {sched.map((r, i) => (
-                <tr key={i}><td>{r.from} → {r.to}<br /><span className="muted small">{r.Ib.toFixed(0)} A · {r.method}</span></td><td>{r.cable}</td><td className="n">{r.len.toFixed(0)}</td><td className="n">{r.vd.toFixed(1)}%</td></tr>
+                <tr key={i}><td>{r.from} → {r.to}<br /><span className="muted small">{r.sys} · {r.Ib.toFixed(0)} A · {r.method}</span></td><td>{r.cable}</td><td className="n">{r.len.toFixed(0)}</td><td className="n">{r.vd.toFixed(1)}%</td></tr>
               ))}
             </tbody>
           </table>

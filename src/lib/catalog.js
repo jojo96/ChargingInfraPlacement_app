@@ -7,11 +7,26 @@ export const CATALOG = {
     bus:   { name: 'Bus bay',        w: 4.0, h: 15.0, cost: 450, color: '#9cf0c4', heavy: true, vehicle: 'bus' },
     truck: { name: 'Truck charging bay', w: 4.7, h: 19.0, cost: 600, color: '#ffb27a', heavy: true, vehicle: 'truck' }, // CharIN 3.3.1.7: min 4.7–5.05 m × 19 m
   },
+  // AC/DC converter (rectifier). Its capacity is shared by the DC chargers it feeds. Any capacity can be typed per item.
+  conv: {
+    c500:  { name: 'Converter 500 kW', kw: 500,  w: 2.0, h: 1.0, cost: 90000,  note: 'AC/DC', height: 2.2 },
+    c1000: { name: 'Converter 1 MW',   kw: 1000, w: 3.0, h: 1.2, cost: 160000, note: 'AC/DC', height: 2.3 },
+    c2000: { name: 'Converter 2 MW',   kw: 2000, w: 4.5, h: 1.4, cost: 300000, note: 'AC/DC', height: 2.4 },
+    c4000: { name: 'Converter 4 MW',   kw: 4000, w: 6.0, h: 2.4, cost: 560000, note: 'AC/DC container', height: 2.6 },
+  },
+  // DC charger (power unit). Its power is shared by the dispensers it feeds.
   charger: {
-    dc50:  { name: 'DC 50 kW',  kw: 50,   w: 0.8, h: 0.6, cost: 25000,  note: 'Car', height: 1.9 },
-    dc150: { name: 'DC 150 kW', kw: 150,  w: 1.0, h: 0.8, cost: 55000,  note: 'Car / van', height: 2.1 },
-    dc400: { name: 'DC 400 kW', kw: 400,  w: 1.4, h: 1.0, cost: 120000, note: 'Truck / bus', height: 2.3 },
-    mcs:   { name: 'MCS 1 MW',  kw: 1000, w: 2.2, h: 1.4, cost: 300000, note: 'Megawatt truck', height: 2.5 },
+    dc50:  { name: 'DC charger 50 kW',  kw: 50,   w: 0.8, h: 0.6, cost: 25000,  note: 'Power unit', height: 1.9 },
+    dc150: { name: 'DC charger 150 kW', kw: 150,  w: 1.0, h: 0.8, cost: 55000,  note: 'Power unit', height: 2.1 },
+    dc400: { name: 'DC charger 400 kW', kw: 400,  w: 1.4, h: 1.0, cost: 120000, note: 'Power unit', height: 2.3 },
+    mcs:   { name: 'DC charger 1 MW',   kw: 1000, w: 2.2, h: 1.4, cost: 300000, note: 'Power unit, MCS', height: 2.5 },
+  },
+  // Dispenser: the post with the cable and connector that stands beside the vehicle.
+  disp: {
+    d50:  { name: 'Dispenser 50 kW',  kw: 50,   w: 0.5, h: 0.35, cost: 6000,  note: 'CCS', height: 1.9 },
+    d150: { name: 'Dispenser 150 kW', kw: 150,  w: 0.6, h: 0.4,  cost: 12000, note: 'CCS', height: 2.0 },
+    d400: { name: 'Dispenser 400 kW', kw: 400,  w: 0.7, h: 0.5,  cost: 20000, note: 'CCS, truck / bus', height: 2.2 },
+    dmcs: { name: 'MCS dispenser 1 MW', kw: 1000, w: 0.9, h: 0.6, cost: 45000, note: 'Megawatt truck', height: 2.4 },
   },
   node: {
     jb:  { name: 'Junction box',          w: 0.8, h: 0.5, cost: 1500,  note: 'Splits one feeder', height: 0.9 },
@@ -22,6 +37,8 @@ export const CATALOG = {
     t1000: { name: 'Transformer 1000 kVA', kva: 1000, w: 3.5, h: 2.6, cost: 60000 },
     t1600: { name: 'Transformer 1600 kVA', kva: 1600, w: 4.0, h: 2.8, cost: 80000 },
     t2500: { name: 'Transformer 2500 kVA', kva: 2500, w: 5.0, h: 3.0, cost: 110000 },
+    t3150: { name: 'Transformer 3150 kVA', kva: 3150, w: 5.5, h: 3.0, cost: 135000 },
+    t4000: { name: 'Transformer 4000 kVA', kva: 4000, w: 6.0, h: 3.2, cost: 165000 },
   },
   grid: {
     mv: { name: 'Grid connection (MV)', w: 1.2, h: 1.2, cost: 15000 },
@@ -36,11 +53,13 @@ export const VEHICLE = {
   car:   { w: 1.85, len: 4.6,  h: 1.5 },
 }
 
-export const KIND_LABEL = { bay: 'Parking bay', charger: 'DC charger', node: 'Distribution', tx: 'Transformer', grid: 'Grid connection' }
+export const KIND_LABEL = { bay: 'Parking bay', conv: 'Converter', charger: 'DC charger', disp: 'Dispenser', node: 'Distribution', tx: 'Transformer', grid: 'Grid connection' }
 
-export const KIND_COLOR = { charger: '#119a63', node: '#2b7de9', tx: '#d98a00', grid: '#7a3fd0' }
+export const KIND_COLOR = { conv: '#0e7490', charger: '#119a63', disp: '#d6409f', node: '#2b7de9', tx: '#d98a00', grid: '#7a3fd0' }
 
 export const ICON_SVG = {
+  conv: '<svg viewBox="0 0 24 24"><path d="M3 8c1.5-3 3-3 4.5 0s3 3 4.5 0" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M12 15h9M12 19h9" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><path d="M19 4 5 20" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  disp: '<svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0zM12 17v4" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   charger: '<svg viewBox="0 0 24 24"><path d="M13 2 5 13h6l-1 9 8-12h-6z" fill="#fff"/></svg>',
   node: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="#fff"/><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
   tx: '<svg viewBox="0 0 24 24"><path d="M3 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>',
@@ -48,6 +67,9 @@ export const ICON_SVG = {
 }
 
 export const spec = (it) => CATALOG[it.kind][it.type]
+
+// Rated power in kW of a converter, charger or dispenser: the typed value if any, otherwise the catalogue value
+export const powerOf = (it) => it.kw ?? spec(it).kw ?? 0
 
 // Default cable design settings (IEC 60364-5-52). Each cable can override any of these.
 export const CABLE_DEFAULTS = {
@@ -77,7 +99,7 @@ export const defaultProject = () => ({
   defaults: { mode: 'ug', route: 'L' },
   cable: { ...CABLE_DEFAULTS },
   rules: {
-    txClear: 3, chargerReach: 6, chargerGap: 1, maxLv: 150, maxVd: 3, simult: 0.8, pf: 0.95, voltage: 400,
+    txClear: 3, chargerReach: 6, chargerGap: 1, maxLv: 150, maxVd: 3, simult: 0.8, pf: 0.95, voltage: 400, dcVoltage: 800,
     // CharIN whitepaper 3.3.1.7 / 3.3.2.2 and FLEXMCS D2.1 VEH_RQ-09, -20, -21, -24
     bayMinW: 4.7, bayMinL: 19, truckW: 2.55, mcsFrontMin: 2, mcsFrontMax: 4.8, mcsMaxGap: 0.9,
   },

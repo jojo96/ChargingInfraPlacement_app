@@ -18,7 +18,7 @@ export default function CableWizard({ cable, project, api }) {
   const set = (patch) => api.updateItem(it.id, { cable: { ...(it.cable || {}), ...patch, choice: patch.choice !== undefined ? patch.choice : undefined } })
   const m = METHOD_BY_ID[cable.method]
   const res = cable.size
-  const autoIb = designCurrent(cable.kw, s.config, R.voltage, R.pf)
+  const autoIb = designCurrent(cable.kw, s.config, cable.voltage, cable.pf)
   const arrangements = ARRANGEMENTS[cable.method] || ARRANGEMENTS.other
   const num = (v) => { const x = parseFloat(v); return isNaN(x) ? undefined : x }
 
@@ -27,7 +27,7 @@ export default function CableWizard({ cable, project, api }) {
       <div className="wiz-head">
         <div>
           <h2>{cable.from.label} → {cable.to.label}</h2>
-          <p className="muted small mono">{cable.len.toFixed(1)} m route · {cable.kw.toFixed(0)} kW · {cable.mode === 'ug' ? 'underground' : 'overground'}</p>
+          <p className="muted small mono">{cable.dc ? `DC ${cable.voltage} V` : `AC ${cable.voltage} V`} · {cable.len.toFixed(1)} m route · {cable.kw.toFixed(0)} kW · {cable.mode === 'ug' ? 'underground' : 'overground'}</p>
         </div>
         <button className="btn" onClick={() => api.updateItem(it.id, { cable: undefined })} title="Use the project defaults again">Apply standard values</button>
       </div>
@@ -35,6 +35,10 @@ export default function CableWizard({ cable, project, api }) {
       {/* 1 */}
       <section className="wiz-step">
         <h3><span className="num">1</span>Conductor material &amp; insulation</h3>
+        {cable.dc ? (
+          <p className="hint">DC link at {cable.voltage} V between converter, charger and dispenser: two loaded conductors (+ and −), copper with XLPE insulation (90 °C). The DC voltage is set under Cable defaults in the Wiring step.</p>
+        ) : (
+          <>
         <label className="lbl-s">Circuit configuration</label>
         <Seg label="Circuit" value={s.config} onChange={(v) => set({ config: v })} options={Object.entries(CONFIGS).map(([k, c]) => [k, `${c.label} (${c.cores} cond.)`])} />
         <p className="hint-s">{CONFIGS[s.config].note}. {CONFIGS[s.config].loaded} loaded conductors · IEC 60364-5-52 §523</p>
@@ -55,6 +59,8 @@ export default function CableWizard({ cable, project, api }) {
             <div className="ro mono">{MAX_TEMP[s.insulation]} °C</div>
           </div>
         </div>
+          </>
+        )}
       </section>
 
       {/* 2 */}
@@ -155,7 +161,7 @@ export default function CableWizard({ cable, project, api }) {
             <input id="w_t" type="number" step="0.05" value={s.tsc} onChange={(e) => set({ tsc: num(e.target.value) ?? 0.2 })} />
           </div>
         </div>
-        <p className="hint-s">Voltage-drop limit {R.maxVd}% (change it in the Hardware step) · {R.voltage} V · cos φ {R.pf}</p>
+        <p className="hint-s">Voltage-drop limit {R.maxVd}% (change it in the Hardware step) · {cable.dc ? `${cable.voltage} V DC` : `${R.voltage} V · cos φ ${R.pf}`}</p>
       </section>
 
       {/* results */}
@@ -187,3 +193,4 @@ export default function CableWizard({ cable, project, api }) {
     </div>
   )
 }
+

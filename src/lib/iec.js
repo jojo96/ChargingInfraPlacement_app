@@ -44,13 +44,16 @@ export const AMPACITY = {
     ['E', 18.5, 25, 34, 43, 60, 80, 101, 126, 153, 196, 238, 276, 319, 364, 430, 497],
     ['F', _, _, _, _, _, _, 110, 137, 167, 216, 264, 308, 356, 409, 485, 561],
   ]),
-  // Table B.52.3 — XLPE/EPR, copper, 2 loaded conductors (single-phase)
+  // Table B.52.3 — XLPE/EPR, copper, 2 loaded conductors (single-phase AC and DC links)
   'cu-xlpe-2': T([
     ['A1', 19, 26, 35, 45, 61, 81, 106, 131, 158, 200, 241, 278, 318, 362, 424, 486],
     ['A2', 18.5, 25, 33, 42, 57, 76, 99, 121, 145, 183, 220, 253, 290, 329, 386, 442],
+    ['B1', 23, 31, 42, 54, 75, 100, 133, 164, 198, 253, 306, 354, _, _, _, _],
+    ['B2', 22, 30, 40, 51, 69, 91, 119, 146, 175, 221, 265, 305, _, _, _, _],
     ['C', 24, 33, 45, 58, 80, 107, 138, 171, 209, 269, 328, 382, 441, 506, 599, 693],
     ['D1', 25, 33, 43, 53, 71, 91, 116, 139, 164, 203, 239, 271, 306, 343, 395, 446],
     ['D2', 27, 35, 46, 58, 77, 100, 129, 155, 183, 225, 270, 306, 343, 387, 448, 502],
+    ['E', 26, 36, 49, 63, 86, 115, 149, 185, 225, 289, 352, 410, 473, 542, 641, 741], // Table B.52.12
   ]),
 }
 
@@ -71,6 +74,7 @@ export const CONFIGS = {
   '1PN': { label: '1P+N', cores: 2, loaded: 2, note: 'Single-phase' },
   '3PN': { label: '3P+N', cores: 4, loaded: 3, note: 'Standard for AC EV feeders' },
   '3PNPE': { label: '3P+N+PE', cores: 5, loaded: 3, note: 'Separate protective earth' },
+  DC: { label: 'DC +/−', cores: 2, loaded: 2, note: 'DC link between converter, charger and dispenser' },
 }
 
 // Correction factors
@@ -144,12 +148,15 @@ export function unitPrice(material, cores, mm2) {
 }
 
 export function designCurrent(kw, config, voltage, pf) {
+  if (config === 'DC') return (kw * 1000) / voltage
   return config === '1PN' ? (kw * 1000) / ((voltage / Math.sqrt(3)) * pf) : (kw * 1000) / (Math.sqrt(3) * voltage * pf)
 }
 
 export function voltageDrop({ config, material, voltage, pf }, I, len, mm2) {
   const rho = material === 'cu' ? 0.0225 : 0.036 // Ω·mm²/m near operating temperature
-  const R = rho / mm2, X = 0.00008, sin = Math.sqrt(1 - pf * pf)
+  const R = rho / mm2
+  if (config === 'DC') return (200 * I * len * R) / voltage // out and back, no reactance
+  const X = 0.00008, sin = Math.sqrt(1 - pf * pf)
   const z = R * pf + X * sin
   return config === '1PN' ? (200 * I * len * z) / (voltage / Math.sqrt(3)) : (100 * Math.sqrt(3) * I * len * z) / voltage
 }
@@ -216,7 +223,7 @@ export function sizeCable(p) {
     out.k4 = out.chosen.k4
     if (out.chosen.k4 < 0.6) out.warnings.push(`Grouping factor k4 = ${out.chosen.k4.toFixed(2)} is below 0.60 for ${out.chosen.groupN} circuits. The cable loses over 40% of its capacity to grouping; consider wider spacing in the trench, fewer parallel circuits or another installation method.`)
   } else {
-    out.warnings.push(`No cable up to 300 mm² with ${p.maxParallel || 8} parallel runs meets ${p.Ib.toFixed(0)} A and ΔU ≤ ${p.vdMax}%. Allow more parallel cables, shorten the route or raise the voltage-drop limit.`)
+    out.warnings.push(`No cable up to 300 mm² with ${p.maxParallel || 8} parallel runs meets ${p.Ib.toFixed(0)} A and ΔU ≤ ${p.vdMax}%. Allow more parallel cables, shorten the route, raise the voltage-drop limit, or split the load over several smaller units.`)
   }
   return out
 }
